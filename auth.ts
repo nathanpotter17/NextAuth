@@ -4,6 +4,7 @@ import { db } from "./lib/db";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { getUserById } from "./data/user";
 import { UserRole } from "@prisma/client";
+import { getTwoFAByUserId } from "./data/twoFAconfirmation";
 
 declare module "next-auth" {
   interface User {
@@ -40,7 +41,16 @@ export const {
         return false;
       }
 
-      //2fa here
+      if (existingUser.isTwoFactor) {
+        const twoFAConf = await getTwoFAByUserId(existingUser.id);
+
+        if (!twoFAConf) return false;
+
+        //delete prev two FA
+        await db.twoFactorConfirmation.delete({
+          where: { id: twoFAConf.id },
+        });
+      }
 
       return true;
     },
@@ -53,6 +63,10 @@ export const {
         session.user.role = token.role as UserRole;
       }
 
+      if (token.isTwoFactorEnabled && session.user) {
+        session.user.isTwoFactorEnabled = token.isTwoFactorEnabled as boolean;
+      }
+
       return session;
     },
     async jwt({ token }) {
@@ -63,6 +77,8 @@ export const {
       if (!existingUser) return token;
 
       token.role = existingUser.role;
+
+      token.isTwoFactorEnabled = existingUser.isTwoFactor;
 
       return token;
     },
