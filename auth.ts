@@ -5,6 +5,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { getUserById } from "./data/user";
 import { UserRole } from "@prisma/client";
 import { getTwoFAByUserId } from "./data/twoFAconfirmation";
+import { getAccountByUserId } from "./data/account";
 
 declare module "next-auth" {
   interface User {
@@ -41,7 +42,7 @@ export const {
         return false;
       }
 
-      if (existingUser.isTwoFactor) {
+      if (existingUser.isTwoFactorEnabled) {
         const twoFAConf = await getTwoFAByUserId(existingUser.id);
 
         if (!twoFAConf) return false;
@@ -63,8 +64,14 @@ export const {
         session.user.role = token.role as UserRole;
       }
 
-      if (token.isTwoFactorEnabled && session.user) {
+      if (session.user) {
         session.user.isTwoFactorEnabled = token.isTwoFactorEnabled as boolean;
+      }
+
+      if (session.user) {
+        session.user.name = token.name;
+        session.user.email = token.email as string;
+        session.user.isOAuth = token.isOAuth as boolean;
       }
 
       return session;
@@ -78,7 +85,13 @@ export const {
 
       token.role = existingUser.role;
 
-      token.isTwoFactorEnabled = existingUser.isTwoFactor;
+      const existingAccount = await getAccountByUserId(existingUser.id);
+
+      token.isOAuth = !!existingAccount;
+      token.name = existingUser.name;
+      token.email = existingUser.email;
+      token.role = existingUser.role;
+      token.isTwoFactorEnabled = existingUser.isTwoFactorEnabled;
 
       return token;
     },
